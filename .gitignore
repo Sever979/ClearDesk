@@ -1,0 +1,16 @@
+*.exe
+*.pdb
+*.zip
+preview*.png
+test-result.txt
+registry-test-result.txt
+SHA256SUMS.txt
+.vs/
+bin/
+obj/
+*.user
+*.suo
+*.reg
+.env
+.env.*
+!.env.example
