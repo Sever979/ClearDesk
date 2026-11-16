@@ -59,16 +59,16 @@ jobs:
         with:
           name: ClearDesk-Windows
           path: dist
-      - name: Package and publish version 1.1.0
+      - name: Package and publish version 1.1.1
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release view v1.1.0 --repo $env:GITHUB_REPOSITORY *> $null
-          if ($LASTEXITCODE -eq 0) { Write-Output 'Release v1.1.0 already exists; leaving it unchanged.'; exit 0 }
-          Compress-Archive -Path dist/ClearDesk.exe, dist/LICENSE.txt, dist/README.md -DestinationPath dist/ClearDesk-1.1.0-portable.zip
-          Get-FileHash dist/ClearDesk.exe, dist/ClearDesk-Setup.exe, dist/ClearDesk-1.1.0-portable.zip -Algorithm SHA256 |
+          gh release view v1.1.1 --repo $env:GITHUB_REPOSITORY *> $null
+          if ($LASTEXITCODE -eq 0) { Write-Output 'Release v1.1.1 already exists; leaving it unchanged.'; exit 0 }
+          Compress-Archive -Path dist/ClearDesk.exe, dist/LICENSE.txt, dist/README.md -DestinationPath dist/ClearDesk-1.1.1-portable.zip
+          Get-FileHash dist/ClearDesk.exe, dist/ClearDesk-Setup.exe, dist/ClearDesk-1.1.1-portable.zip -Algorithm SHA256 |
             ForEach-Object { '{0}  {1}' -f $_.Hash.ToLowerInvariant(), (Split-Path $_.Path -Leaf) } |
             Set-Content dist/SHA256SUMS.txt -Encoding ASCII
-          gh release create v1.1.0 dist/ClearDesk-Setup.exe dist/ClearDesk.exe dist/ClearDesk-1.1.0-portable.zip dist/SHA256SUMS.txt --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title 'ClearDesk 1.1.0' --notes-file docs/RELEASE-v1.1.0.md
+          gh release create v1.1.1 dist/ClearDesk-Setup.exe dist/ClearDesk.exe dist/ClearDesk-1.1.1-portable.zip dist/SHA256SUMS.txt --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title 'ClearDesk 1.1.1' --notes-file docs/RELEASE-v1.1.1.md
           if ($LASTEXITCODE -ne 0) { throw 'Release publishing failed' }

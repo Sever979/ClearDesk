@@ -9,12 +9,12 @@ using System.Windows.Forms;
 [assembly: AssemblyCompany("Sever979")]
 [assembly: AssemblyProduct("ClearDesk")]
 [assembly: AssemblyCopyright("© 2026 Sever979. Все права защищены.")]
-[assembly: AssemblyVersion("1.1.0.0")]
-[assembly: AssemblyFileVersion("1.1.0.0")]
-[assembly: AssemblyInformationalVersion("1.1.0")]
+[assembly: AssemblyVersion("1.1.1.0")]
+[assembly: AssemblyFileVersion("1.1.1.0")]
+[assembly: AssemblyInformationalVersion("1.1.1")]
 
 internal static class ProductInfo {
- public const string Version="1.1.0";
+ public const string Version="1.1.1";
  public const string Developer="Sever979";
  public const string Copyright="© 2026 Sever979. Все права защищены.";
  public const string Email="severinovdimka25@gmail.com";

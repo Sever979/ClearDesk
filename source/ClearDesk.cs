@@ -97,7 +97,11 @@ class MainForm:Form {
  [DllImport("kernel32.dll")] static extern bool GetSystemTimes(out long idle,out long kernel,out long user);
  long prevIdle,prevTotal,prevRx,prevTx;DateTime networkTime=DateTime.UtcNow; bool sampled;
  Label metrics=new Label(),disks=new Label(),status=new Label(); Chart chart=new Chart(); ListView processes,files,registry; Button scanTemp,cleanTemp,scanReg,cleanReg; System.Windows.Forms.Timer timer=new System.Windows.Forms.Timer(); NotifyIcon tray;
- public MainForm(){
+ DiskAlerts diskAlerts; DateTime nextDiskCheck=DateTime.MinValue; Label diskAlertStatus=new Label();
+ readonly bool allowDiskAlerts;
+ public MainForm():this(true){}
+ public MainForm(bool allowAlerts){
+  allowDiskAlerts=allowAlerts;diskAlerts=allowAlerts?DiskAlerts.Load(DiskAlerts.SettingsPath):new DiskAlerts();
   Text="ClearDesk — очистка и мониторинг"; Size=new Size(1100,760); MinimumSize=new Size(940,650); StartPosition=FormStartPosition.CenterScreen; Font=new Font("Segoe UI",10); BackColor=Color.FromArgb(14,23,38); ForeColor=Color.White;
   var layout=new TableLayoutPanel{Dock=DockStyle.Fill,RowCount=4,ColumnCount=1,Padding=new Padding(22)};layout.RowStyles.Add(new RowStyle(SizeType.Absolute,65));layout.RowStyles.Add(new RowStyle(SizeType.Absolute,35));layout.RowStyles.Add(new RowStyle(SizeType.Percent,100));layout.RowStyles.Add(new RowStyle(SizeType.Absolute,40));Controls.Add(layout);
   layout.Controls.Add(new Label{Text="ClearDesk   /   забота о системе",Font=new Font("Segoe UI",23,FontStyle.Bold),AutoSize=true},0,0);
@@ -118,10 +122,32 @@ class MainForm:Form {
   var aboutLayout=new TableLayoutPanel{Dock=DockStyle.Fill,ColumnCount=1,RowCount=2,Padding=new Padding(18)};aboutLayout.RowStyles.Add(new RowStyle(SizeType.Percent,100));aboutLayout.RowStyles.Add(new RowStyle(SizeType.Absolute,55));about.Controls.Add(aboutLayout);
   aboutLayout.Controls.Add(new TextBox{Dock=DockStyle.Fill,Multiline=true,ReadOnly=true,ScrollBars=ScrollBars.Vertical,BorderStyle=BorderStyle.None,BackColor=about.BackColor,ForeColor=Color.White,Font=new Font("Segoe UI",11),Text=
    "ClearDesk "+ProductInfo.Version+" — Free\r\nРазработчик: "+ProductInfo.Developer+"\r\n"+ProductInfo.Copyright+"\r\nПочта: "+ProductInfo.Email+
-   "\r\n\r\nУсловно-бесплатная программа\r\nБазовая редакция бесплатна без ограничения срока. Мониторинг, ручная очистка временных файлов и остатков в реестре, резервные копии доступны сейчас.\r\n\r\nClearDesk Pro — планируемая ежемесячная подписка\r\n• Очистка по расписанию с исключениями.\r\n• История нагрузки за 30 дней и отчёты CSV.\r\n• Уведомления о нагрузке и нехватке свободного места.\r\n• Поиск крупных файлов и дубликатов с ручным выбором.\r\n• Управление автозагрузкой с отменой изменений.\r\n• Настраиваемые профили очистки.\r\n\r\nPro пока не реализован и не продаётся. Цена и условия будут опубликованы перед запуском. Оплата и автоматические списания отсутствуют.\r\nБесплатные функции и резервные копии сохранятся после окончания будущей подписки."});
+   "\r\n\r\nУсловно-бесплатная программа\r\nБазовая редакция бесплатна без ограничения срока. Мониторинг, ручная очистка временных файлов и остатков в реестре, резервные копии доступны сейчас.\r\n\r\nClearDesk Pro — планируемая ежемесячная подписка\r\n• Очистка по расписанию с исключениями.\r\n• История нагрузки за 30 дней и отчёты CSV.\r\n• Расширенные уведомления о нагрузке и других дисках.\r\n• Поиск крупных файлов и дубликатов с ручным выбором.\r\n• Управление автозагрузкой с отменой изменений.\r\n• Настраиваемые профили очистки.\r\n\r\nPro пока не реализован и не продаётся. Цена и условия будут опубликованы перед запуском. Оплата и автоматические списания отсутствуют.\r\nБесплатные функции и резервные копии сохранятся после окончания будущей подписки."});
   var aboutButtons=new FlowLayoutPanel{Dock=DockStyle.Fill};aboutLayout.Controls.Add(aboutButtons);aboutButtons.Controls.Add(Button("Условия использования",delegate{ProductInfo.ShowLicense();}));aboutButtons.Controls.Add(Button("Написать разработчику",delegate{try{Process.Start(new ProcessStartInfo("mailto:"+ProductInfo.Email+"?subject=ClearDesk"){UseShellExecute=true});}catch{MessageBox.Show("Напишите на "+ProductInfo.Email);}}));
+  var settings=Page(tabs,"Уведомления");
+  var settingsLayout=new FlowLayoutPanel{Dock=DockStyle.Fill,FlowDirection=FlowDirection.TopDown,WrapContents=false,AutoScroll=true,Padding=new Padding(20)};settings.Controls.Add(settingsLayout);
+  settingsLayout.Controls.Add(new Label{Text="Свободное место на диске C:",AutoSize=true,Font=new Font("Segoe UI",17,FontStyle.Bold),Margin=new Padding(3,5,3,20)});
+  var enabled=new CheckBox{Text="Предупреждать, когда на диске C: мало места",Checked=diskAlerts.Enabled,AutoSize=true};settingsLayout.Controls.Add(enabled);
+  var thresholdRow=new FlowLayoutPanel{AutoSize=true,Margin=new Padding(3,15,3,15)};thresholdRow.Controls.Add(new Label{Text="Предупреждать, если свободно меньше",AutoSize=true,Padding=new Padding(0,5,0,0)});
+  var threshold=new NumericUpDown{Minimum=1,Maximum=100,Value=diskAlerts.ThresholdGb,Width=70};thresholdRow.Controls.Add(threshold);thresholdRow.Controls.Add(new Label{Text="ГБ (1 ГБ = 1024³ байт)",AutoSize=true,Padding=new Padding(0,5,0,0)});settingsLayout.Controls.Add(thresholdRow);
+  settingsLayout.Controls.Add(new Label{AutoSize=true,MaximumSize=new Size(800,0),Text="Проверка каждую минуту, пока ClearDesk запущен, в том числе в трее.\nПовторное предупреждение — не чаще одного раза в 6 часов, даже после перезапуска.\nНажатие на уведомление открывает раздел временных файлов.\nФайлы не удаляются автоматически. Windows может скрыть всплывающее уведомление\nпри отключённых уведомлениях или включённом режиме «Не беспокоить»."});
+  diskAlertStatus.AutoSize=true;diskAlertStatus.MaximumSize=new Size(800,0);diskAlertStatus.Margin=new Padding(3,20,3,10);settingsLayout.Controls.Add(diskAlertStatus);
+  settingsLayout.Controls.Add(Button("Сохранить настройки",delegate{diskAlerts.Enabled=enabled.Checked;diskAlerts.ThresholdGb=(int)threshold.Value;try{diskAlerts.Save(DiskAlerts.SettingsPath);status.Text="Настройки уведомлений сохранены.";nextDiskCheck=DateTime.MinValue;CheckDiskSpace();}catch(Exception ex){status.Text="Настройки действуют до закрытия. Не удалось сохранить: "+ex.Message;}}));
+  settingsLayout.Controls.Add(Button("Показать пример уведомления",delegate{tray.ShowBalloonTip(10000,"ClearDesk — пример уведомления","Пример: на диске C: мало места. Нажмите, чтобы проверить временные файлы. Это проверка уведомлений, а не состояние вашего диска.",ToolTipIcon.Info);}));
   tray=new NotifyIcon{Icon=SystemIcons.Application,Text="ClearDesk",Visible=true};tray.DoubleClick+=delegate{Show();WindowState=FormWindowState.Normal;Activate();};var menu=new ContextMenuStrip();menu.Items.Add("Открыть",null,delegate{Show();WindowState=FormWindowState.Normal;});menu.Items.Add("Выход",null,delegate{Close();});tray.ContextMenuStrip=menu;
-  Resize+=delegate{if(WindowState==FormWindowState.Minimized)Hide();};FormClosed+=delegate{timer.Stop();tray.Dispose();};timer.Interval=2000;timer.Tick+=delegate{UpdateMetrics();};UpdateMetrics();timer.Start();
+  tray.BalloonTipClicked+=delegate{Show();WindowState=FormWindowState.Normal;tabs.SelectedTab=temp;Activate();status.Text=String.Equals(Path.GetPathRoot(Path.GetTempPath()),@"C:\",StringComparison.OrdinalIgnoreCase)?"Нажмите «Найти файлы», проверьте результаты и выберите ненужные файлы.":"Ваша папка Temp находится не на C:. Её очистка не освободит место на диске C:.";};
+  Resize+=delegate{if(WindowState==FormWindowState.Minimized)Hide();};FormClosed+=delegate{timer.Stop();tray.Dispose();};timer.Interval=2000;timer.Tick+=delegate{UpdateMetrics();CheckDiskSpace();};UpdateMetrics();Shown+=delegate{CheckDiskSpace();};timer.Start();
+ }
+ void CheckDiskSpace(){
+  if(!allowDiskAlerts||DateTime.UtcNow<nextDiskCheck)return;DateTime now=DateTime.UtcNow;nextDiskCheck=now.AddMinutes(1);
+  try{var drive=new DriveInfo(@"C:\");if(!drive.IsReady){diskAlertStatus.Text="Диск C: сейчас недоступен. Проверка будет повторена.";return;}
+   long free=drive.AvailableFreeSpace;diskAlertStatus.Text="На диске C: свободно "+Clean.Size(free)+". "+(diskAlerts.IsLow(free)?"Меньше установленного порога.":"Места достаточно по заданному порогу.");
+   // Read the persisted cooldown as another instance may have sent an alert.
+   var saved=DiskAlerts.Load(DiskAlerts.SettingsPath);if(saved.LastNotificationUtc>diskAlerts.LastNotificationUtc)diskAlerts.LastNotificationUtc=saved.LastNotificationUtc;
+   if(!diskAlerts.ShouldNotify(free,now))return;
+   tray.ShowBalloonTip(10000,"На диске C: мало места","Свободно "+Clean.Size(free)+". Проверьте и удалите ненужные временные файлы. Нажмите, чтобы открыть проверку.",ToolTipIcon.Warning);
+   diskAlerts.LastNotificationUtc=now;try{diskAlerts.Save(DiskAlerts.SettingsPath);}catch(Exception ex){status.Text="Предупреждение показано; не удалось сохранить интервал повторения: "+ex.Message;}
+  }catch(IOException){diskAlertStatus.Text="Не удалось проверить диск C:. Повторим через минуту.";}catch(UnauthorizedAccessException){diskAlertStatus.Text="Нет доступа к сведениям о диске C:.";}
  }
  TabPage Page(TabControl tabs,string title){var p=new TabPage(title){BackColor=Color.FromArgb(24,35,53),ForeColor=Color.White};tabs.TabPages.Add(p);return p;}
  ListView List(string[] names){var l=new ListView{Dock=DockStyle.Fill,View=View.Details,FullRowSelect=true,BackColor=Color.FromArgb(20,30,46),ForeColor=Color.White,BorderStyle=BorderStyle.None};foreach(var n in names)l.Columns.Add(n,200);l.Columns[0].Width=400;return l;}
@@ -164,8 +190,9 @@ static class Tests {
   File.SetLastWriteTimeUtc(old,DateTime.UtcNow.AddDays(-3));found=Clean.Scan(root);if(!Clean.Delete(found[0])||!File.Exists(fresh))throw new Exception("delete scope");if(Clean.Safe(fresh,root+"-other"))throw new Exception("boundary");
   if(RegistryCleaner.Orphan("msiexec /x {fake}",root)||RegistryCleaner.Orphan("\""+Path.Combine(root,"no.exe")+"\"",root))throw new Exception("registry false positive");
   string missing=Path.Combine(root,"missing");if(!RegistryCleaner.Orphan("\""+Path.Combine(missing,"uninstall.exe")+"\"",missing))throw new Exception("orphan detection");
-  using(var form=new MainForm()){form.Show();Application.DoEvents();var tabs=form.Controls[0].Controls.OfType<TabControl>().Single();for(int i=0;i<tabs.TabCount;i++){tabs.SelectedIndex=i;Application.DoEvents();using(var bmp=new Bitmap(form.Width,form.Height)){form.DrawToBitmap(bmp,new Rectangle(0,0,bmp.Width,bmp.Height));bmp.Save(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,i==0?"preview.png":"preview-"+i+".png"));}}form.Close();}
-  File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"test-result.txt"),"PASS: age filter; modified-file protection; deletion scope; path boundary; conservative registry detection; UI render.");return 0;
+  DiskAlerts.Test(root);
+  using(var form=new MainForm(false)){form.Show();Application.DoEvents();var tabs=form.Controls[0].Controls.OfType<TabControl>().Single();for(int i=0;i<tabs.TabCount;i++){tabs.SelectedIndex=i;Application.DoEvents();using(var bmp=new Bitmap(form.Width,form.Height)){form.DrawToBitmap(bmp,new Rectangle(0,0,bmp.Width,bmp.Height));bmp.Save(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,i==0?"preview.png":"preview-"+i+".png"));}}form.Close();}
+  File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"test-result.txt"),"PASS: age filter; modified-file protection; deletion scope; path boundary; conservative registry detection; disk alert threshold, disabled state, 6-hour cooldown, persistence, restart and corrupt settings; UI render.");return 0;
  }catch(Exception ex){File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"test-result.txt"),ex.ToString());return 1;}finally{foreach(string f in Directory.GetFiles(root))File.Delete(f);Directory.Delete(root);}}
 }
 }
