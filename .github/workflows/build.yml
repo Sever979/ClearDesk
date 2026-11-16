@@ -14,12 +14,23 @@ jobs:
   build:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Fetch source into a Windows-safe directory
+        shell: powershell
+        working-directory: ${{ runner.temp }}
+        run: |
+          $source = Join-Path $env:RUNNER_TEMP 'cleardesk-source'
+          git init $source
+          git -C $source fetch --depth=1 "https://github.com/$env:GITHUB_REPOSITORY.git" $env:GITHUB_SHA
+          if ($LASTEXITCODE -ne 0) { throw 'Source fetch failed' }
+          git -C $source checkout --detach FETCH_HEAD
+          if ($LASTEXITCODE -ne 0) { throw 'Source checkout failed' }
       - name: Build application and installer
         shell: powershell
+        working-directory: ${{ runner.temp }}/cleardesk-source
         run: ./source/build.ps1
       - name: Compute SHA-256 checksums
         shell: powershell
+        working-directory: ${{ runner.temp }}/cleardesk-source
         run: |
           Get-FileHash ClearDesk.exe, ClearDesk-Setup.exe -Algorithm SHA256 |
             ForEach-Object { '{0}  {1}' -f $_.Hash.ToLowerInvariant(), (Split-Path $_.Path -Leaf) } |
@@ -29,17 +40,17 @@ jobs:
         with:
           name: ClearDesk-Windows
           path: |
-            ClearDesk.exe
-            ClearDesk-Setup.exe
-            LICENSE.txt
-            README.md
-            SHA256SUMS.txt
+            ${{ runner.temp }}/cleardesk-source/ClearDesk.exe
+            ${{ runner.temp }}/cleardesk-source/ClearDesk-Setup.exe
+            ${{ runner.temp }}/cleardesk-source/LICENSE.txt
+            ${{ runner.temp }}/cleardesk-source/README.md
+            ${{ runner.temp }}/cleardesk-source/SHA256SUMS.txt
           if-no-files-found: error
 
   release:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: build
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
@@ -49,7 +60,7 @@ jobs:
           name: ClearDesk-Windows
           path: dist
       - name: Package and publish version 1.1.0
-        shell: powershell
+        shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
